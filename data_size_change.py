@@ -195,7 +195,7 @@ def train_data_size(data_size, epochs=20):
     pretrain_net.to(device)
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(pretrain_net.parameters(), lr=0.01)
+    optimizer = optim.SGD(pretrain_net.parameters(), lr=0.01, momentum=0.9)
 
     train(pretrain_net, criterion, optimizer, num_epochs=epochs, decay_epochs=10,
           init_lr=0.01, task='classification', trainloader=trainloader, testloader=testloader, device=device)
@@ -207,7 +207,7 @@ def train_data_size(data_size, epochs=20):
     random_net.to(device)
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(random_net.parameters(), lr=0.01)
+    optimizer = optim.SGD(random_net.parameters(), lr=0.01, momentum=0.9)
 
     train(random_net, criterion, optimizer, num_epochs=epochs, decay_epochs=10,
           init_lr=0.01, task='classification', trainloader=trainloader, testloader=testloader, device=device)
