@@ -49,14 +49,14 @@ class CIFAR10Rotation(torchvision.datasets.CIFAR10):
         return image, image_rotated, rotation_label, torch.tensor(cls_label).long()
 
 
-def run_test(net, testloader, criterion, task):
+def run_test(net, testloader, criterion, task, device):
     correct = 0
     total = 0
     avg_test_loss = 0.0
     # since we're not training, we don't need to calculate the gradients for our outputs
     with torch.no_grad():
         for images, images_rotated, labels, cls_labels in testloader:
-            device = images.device
+            #device = images.device
             if task == 'rotation':
               images, labels = images_rotated.to(device), labels.to(device)
             elif task == 'classification':
@@ -86,7 +86,7 @@ def adjust_learning_rate(optimizer, epoch, init_lr, decay_epochs=30):
 # Both the self-supervised rotation task and supervised CIFAR10 classification are
 # trained with the CrossEntropyLoss, so we can use the training loop code.
 
-def train(net, criterion, optimizer, num_epochs, decay_epochs, init_lr, task, trainloader, testloader):
+def train(net, criterion, optimizer, num_epochs, decay_epochs, init_lr, task, trainloader, testloader, device):
 
     for epoch in range(num_epochs):  # loop over the dataset multiple times
 
@@ -102,7 +102,7 @@ def train(net, criterion, optimizer, num_epochs, decay_epochs, init_lr, task, tr
 
             # TODO: Set the data to the correct device; Different task will use different inputs and labels
             #
-            device = imgs.device
+            #device = imgs.device
             if task == 'rotation':
                 inputs, labels = imgs_rotated.to(device), rotation_label.to(device)
             elif task == 'classification':
@@ -139,12 +139,12 @@ def train(net, criterion, optimizer, num_epochs, decay_epochs, init_lr, task, tr
         # TODO: Run the run_test() function after each epoch; Set the model to the evaluation mode.
 
         net.eval()
-        run_test(net, testloader, criterion, task)
+        run_test(net, testloader, criterion, task, device)
 
     print('Finished Training')
 
 
-def train_data_size(data_size):
+def train_data_size(data_size, epochs=20):
 
     # main
     transform_train = transforms.Compose([
@@ -153,50 +153,62 @@ def train_data_size(data_size):
         transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ])
-    
+
     transform_test = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ])
-    
+
     batch_size = 128
-    
+
     # Select a subset of the training set
     trainset = CIFAR10Rotation(root='./data', train=True,
                                             download=True, transform=transform_train)
-    
+
     #########################################
     subset_size = 10000  # Change this value to experiment with different sizes
     subset_indices = np.random.choice(len(trainset), subset_size, replace=False)
     train_subset = Subset(trainset, subset_indices)
     trainloader = torch.utils.data.DataLoader(train_subset, batch_size=batch_size,
                                             shuffle=True, num_workers=2)
-    
+
     testset = CIFAR10Rotation(root='./data', train=False,
                                         download=True, transform=transform_test)
     testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
                                             shuffle=False, num_workers=2)
-    
+
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    
-    
+
+
     # TODO: Load the pre-trained ResNet18 model
     # Randomly initialize a ResNet18 model
     pretrain_net = resnet18(num_classes=4)
-    
+
     # Load the pre-trained model from the local directory
     pretrained_path = 'final_project_1.pth'
     pretrain_net.load_state_dict(torch.load(pretrained_path))
-    
+
     # Modify the final fully connected layer to match the number of CIFAR-10 classes
     num_ftrs = pretrain_net.fc.in_features
     pretrain_net.fc = nn.Linear(num_ftrs, 10)
-    
+
     pretrain_net.to(device)
-    
+
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(pretrain_net.parameters(), lr=0.01)
-    
-    train(pretrain_net, criterion, optimizer, num_epochs=1, decay_epochs=10, 
-          init_lr=0.01, task='classification', trainloader=trainloader, testloader=testloader)
+
+    train(pretrain_net, criterion, optimizer, num_epochs=epochs, decay_epochs=10,
+          init_lr=0.01, task='classification', trainloader=trainloader, testloader=testloader, device=device)
     torch.save(pretrain_net.state_dict(), f'pretrained_{data_size=}.pth')
+
+    # Random Weight
+    print("==================== RANDOM ========================")
+    random_net = resnet18(num_classes=10)
+    random_net.to(device)
+
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(random_net.parameters(), lr=0.01)
+
+    train(random_net, criterion, optimizer, num_epochs=epochs, decay_epochs=10,
+          init_lr=0.01, task='classification', trainloader=trainloader, testloader=testloader, device=device)
+    torch.save(random_net.state_dict(), f'random_{data_size=}.pth')
